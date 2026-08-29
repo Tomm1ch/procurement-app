@@ -1,6 +1,7 @@
 import re
 import shutil
 import tempfile
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -9,14 +10,13 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
-from openai import OpenAI
-from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
 from .models import CommodityGroup, EmailLog, OrderLine, ProcurementRequest
 
 
-class ExtractedOrderLine(BaseModel):
+@dataclass
+class ExtractedOrderLine:
     description: str = ""
     unit_price: float | None = None
     quantity: float | None = None
@@ -24,7 +24,8 @@ class ExtractedOrderLine(BaseModel):
     total_price: float | None = None
 
 
-class ExtractedQuote(BaseModel):
+@dataclass
+class ExtractedQuote:
     requestor_name: str = ""
     department: str = ""
     title: str = ""
@@ -35,28 +36,12 @@ class ExtractedQuote(BaseModel):
     total_cost: float | None = None
     commodity_group_id: str | None = None
     classification_reason: str = ""
-    order_lines: list[ExtractedOrderLine] = Field(default_factory=list)
+    order_lines: list[ExtractedOrderLine] = field(default_factory=list)
 
 
 def extract_quote(procurement_request):
     text = extract_pdf_text(procurement_request)
-    if not settings.OPENAI_API_KEY:
-        return extract_quote_locally(text, procurement_request.original_filename)
-    groups = "\n".join(f"{g.id}: {g.category} / {g.name}" for g in CommodityGroup.objects.filter(active=True))
-    response = OpenAI(api_key=settings.OPENAI_API_KEY).responses.parse(
-        model=settings.OPENAI_MODEL,
-        input=[{"role": "user", "content": [
-            {"type": "input_text", "text": (
-                "Extract this vendor quote. Preserve decimal values and ISO currency codes. Choose exactly one "
-                "commodity_group_id from the catalogue when possible. Do not invent missing values. Dates must "
-                "be YYYY-MM-DD.\n\nCatalogue:\n" + groups + "\n\nQuote text:\n" + text
-            )},
-        ]}],
-        text_format=ExtractedQuote,
-    )
-    if not response.output_parsed:
-        raise RuntimeError("The document could not be converted into structured fields.")
-    return response.output_parsed
+    return extract_quote_locally(text, procurement_request.original_filename)
 
 
 def extract_pdf_text(procurement_request):
@@ -102,7 +87,7 @@ def _ocr_pdf_text(procurement_request):
 
 
 def extract_quote_locally(text, filename):
-    """Best-effort parser used when no external AI service is configured."""
+    """Convert locally extracted PDF/OCR text into structured quote fields."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     vat_match = re.search(r"(?:USt[.\s-]*(?:IdNr|ID)|UID|VAT\s*ID|Umsatzsteuer[^:\n]*)[.:\s-]*(DE\s?\d{9})", text, re.I)
     date_match = re.search(r"(?:Angebotsdatum|Datum|Offer Date|Quote Date)\s*[:.]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2})", text, re.I)
@@ -213,7 +198,7 @@ def apply_extraction(procurement_request, extracted):
         procurement_request.commodity_group = CommodityGroup.objects.filter(pk=extracted.commodity_group_id).first()
     if not procurement_request.commodity_group:
         procurement_request.commodity_group = CommodityGroup.objects.filter(pk="009").first()
-    procurement_request.raw_extraction = extracted.model_dump(mode="json")
+    procurement_request.raw_extraction = asdict(extracted)
     procurement_request.extraction_status = ProcurementRequest.ExtractionStatus.COMPLETED
     procurement_request.extraction_error = ""
     procurement_request.save()

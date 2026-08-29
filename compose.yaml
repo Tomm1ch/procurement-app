@@ -37,8 +37,6 @@ services:
       POSTGRES_PORT: 5432
       EMAIL_HOST: mailpit
       EMAIL_PORT: 1025
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
     ports:
       - "8000:8000"
     volumes:

@@ -1,8 +1,6 @@
 Django>=5.2,<5.3
 gunicorn>=23,<24
-openai>=1.99,<2
 psycopg[binary]>=3.2,<4
-pydantic>=2.11,<3
 python-dotenv>=1.1,<2
 pypdf>=5.9,<6
 ocrmypdf>=17.10,<18

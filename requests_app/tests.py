@@ -51,7 +51,6 @@ class RequestWorkflowTests(TestCase):
         response = self.client.get(reverse("requests_app:home"))
         self.assertRedirects(response, reverse("login"))
 
-    @override_settings(OPENAI_API_KEY="")
     def test_guest_can_upload_and_access_own_draft(self):
         response = self.client.post(reverse("requests_app:upload"), {
             "requestor_name": "Guest User", "email": "guest@example.com",
@@ -163,7 +162,6 @@ class RequestWorkflowTests(TestCase):
         self.assertEqual(request.department, "Engineering")
         self.assertTrue(request.status_history.filter(comment="Request details updated by procurement").exists())
 
-    @override_settings(OPENAI_API_KEY="")
     def test_valid_pdf_upload_is_saved_when_extraction_is_unavailable(self):
         self.client.force_login(self.employee)
         response = self.client.post(reverse("requests_app:upload"), {"document": SimpleUploadedFile("offer.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf")})
@@ -201,7 +199,7 @@ class RequestWorkflowTests(TestCase):
         self.assertTrue(StatusHistory.objects.filter(request=request, new_status="SUBMITTED").exists())
         self.assertEqual(len(mail.outbox), 2)
 
-    def test_local_parser_extracts_german_quote_fields_without_api_key(self):
+    def test_local_parser_extracts_german_quote_fields(self):
         extracted = extract_quote_locally(
             "Dream in Green GmbH\nAngebot 4120\nDatum: 28.11.23\n"
             "Moosbild 1,00 Stk. 715,26 €\nUSt.-ID: DE325240530\nEndsumme 1.847,19 €",
