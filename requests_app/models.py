@@ -24,6 +24,15 @@ class CommodityGroup(models.Model):
 
 
 class ProcurementRequest(models.Model):
+    CURRENCY_CHOICES = (
+        ("EUR", "EUR — Euro"),
+        ("USD", "USD — US Dollar"),
+        ("GBP", "GBP — British Pound"),
+        ("CHF", "CHF — Swiss Franc"),
+        ("CAD", "CAD — Canadian Dollar"),
+        ("JPY", "JPY — Japanese Yen"),
+    )
+
     DEPARTMENT_CHOICES = (
         ("Engineering", "Engineering"),
         ("Finance", "Finance"),
@@ -62,7 +71,7 @@ class ProcurementRequest(models.Model):
     vendor_name = models.CharField(max_length=250, blank=True)
     vendor_vat_id = models.CharField(max_length=40, blank=True)
     offer_date = models.DateField(null=True, blank=True)
-    currency = models.CharField(max_length=3, default="EUR")
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default="EUR")
     total_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
     commodity_group = models.ForeignKey(CommodityGroup, null=True, blank=True, on_delete=models.PROTECT)
     classification_reason = models.TextField(blank=True)

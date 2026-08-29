@@ -247,6 +247,8 @@ class RequestWorkflowTests(TestCase):
         self.assertTrue(form.fields["commodity_group"].disabled)
         self.assertIn("short_description", form.fields)
         self.assertTrue(form.fields["total_cost"].widget.attrs["readonly"])
+        self.assertEqual(form.fields["currency"].widget.input_type, "select")
+        self.assertIn(("EUR", "EUR — Euro"), form.fields["currency"].choices)
 
     def test_procurement_form_can_edit_commodity_group(self):
         from .forms import ProcurementRequestForm

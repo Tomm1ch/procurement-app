@@ -43,7 +43,7 @@ class ProcurementRequestForm(forms.ModelForm):
                 "aria-readonly": "true",
                 "class": "calculated-field",
             }),
-            "currency": forms.TextInput(attrs={"maxlength": "3"}),
+            "currency": forms.Select(),
         }
 
     def __init__(self, *args, commodity_editable=False, requestor_details_editable=True, **kwargs):
