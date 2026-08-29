@@ -38,7 +38,8 @@ class ProcurementRequest(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     request_number = models.CharField(max_length=24, unique=True, blank=True)
-    requestor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="procurement_requests")
+    requestor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="procurement_requests")
+    guest_email = models.EmailField(blank=True)
     requestor_name = models.CharField(max_length=200, blank=True)
     department = models.CharField(max_length=150, blank=True)
     title = models.CharField(max_length=250, blank=True)
@@ -91,7 +92,7 @@ class StatusHistory(models.Model):
     request = models.ForeignKey(ProcurementRequest, on_delete=models.CASCADE, related_name="status_history")
     old_status = models.CharField(max_length=20, choices=ProcurementRequest.Status.choices, blank=True)
     new_status = models.CharField(max_length=20, choices=ProcurementRequest.Status.choices)
-    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT)
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

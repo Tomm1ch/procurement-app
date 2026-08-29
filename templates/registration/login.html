@@ -16,6 +16,8 @@
       <label for="id_password">Password</label>{{ form.password }}
       <button class="button primary full" type="submit">Sign in</button>
     </form>
+    <div class="guest-divider"><span>or</span></div>
+    <a class="button secondary full" href="{% url 'requests_app:upload' %}">Upload a file without login</a>
     <p class="demo-hint">Demo: <code>employee</code> or <code>procurement</code> · password <code>&lt;username&gt;123</code></p>
   </div>
 </section>

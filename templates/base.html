@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/guest.css' %}">
 </head>
 <body>
   <header class="topbar">
@@ -19,6 +20,8 @@
         <span class="user-name">{{ user.get_full_name|default:user.username }}</span>
         <form action="{% url 'logout' %}" method="post" class="inline-form">{% csrf_token %}<button class="link-button" type="submit">Sign out</button></form>
       </nav>
+    {% else %}
+      <nav aria-label="Main navigation"><a href="{% url 'login' %}">Procurement sign in</a></nav>
     {% endif %}
   </header>
   <main class="page-shell {% block shell_class %}{% endblock %}">

@@ -11,7 +11,7 @@ submission; procurement users manage incoming requests and status updates.
 - Automatic classification into the 50 supplied commodity groups
 - Editable drafts with server-side submission validation
 - Employee and procurement dashboards
-- Django group-based authorization and prepared demo users
+- Guest upload with browser-session isolation, plus Django group-based authorization and demo users
 - Immutable request status history
 - Upload, submission, and status-change email notifications
 - PostgreSQL and Mailpit containers
@@ -84,7 +84,7 @@ it will not unexpectedly reset an existing password.
 
 ## User workflow
 
-1. The employee signs in and uploads a vendor quote PDF.
+1. A guest or signed-in employee uploads a vendor quote PDF. Guests provide their name and email.
 2. Django stores the original document and sends it to OpenAI for extraction.
 3. The employee receives an upload email and reviews all extracted fields.
 4. The employee can add, edit, or delete order lines and correct any field.

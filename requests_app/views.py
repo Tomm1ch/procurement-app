@@ -13,8 +13,9 @@ from .permissions import is_procurement, procurement_required
 from .services import apply_extraction, extract_quote, send_request_email, submission_errors
 
 
-@login_required
 def home(request):
+    if not request.user.is_authenticated:
+        return redirect("login")
     return redirect("requests_app:procurement_list" if is_procurement(request.user) else "requests_app:my_requests")
 
 
@@ -24,13 +25,14 @@ def my_requests(request):
     return render(request, "requests_app/my_requests.html", {"requests": requests})
 
 
-@login_required
 def upload_request(request):
-    form = PDFUploadForm(request.POST or None, request.FILES or None)
+    form = PDFUploadForm(request.POST or None, request.FILES or None, user=request.user)
     if request.method == "POST" and form.is_valid():
         document = form.cleaned_data["document"]
         procurement_request = ProcurementRequest.objects.create(
-            requestor=request.user, requestor_name=request.user.get_full_name() or request.user.username,
+            requestor=request.user if request.user.is_authenticated else None,
+            requestor_name=(request.user.get_full_name() or request.user.username) if request.user.is_authenticated else form.cleaned_data["requestor_name"],
+            guest_email="" if request.user.is_authenticated else form.cleaned_data["email"],
             document=document, original_filename=document.name,
             extraction_status=ProcurementRequest.ExtractionStatus.PROCESSING,
         )
@@ -42,15 +44,21 @@ def upload_request(request):
             procurement_request.extraction_error = str(exc)
             procurement_request.save(update_fields=["extraction_status", "extraction_error", "updated_at"])
             messages.warning(request, "The PDF was saved, but automatic extraction was unavailable. Please complete the fields manually.")
-        if request.user.email:
-            send_request_email(procurement_request, request.user.email, "UPLOAD", f"Upload received: {procurement_request.request_number}", "emails/upload_received.html", request)
+        if not request.user.is_authenticated:
+            guest_requests = request.session.setdefault("guest_request_ids", [])
+            guest_requests.append(str(procurement_request.pk))
+            request.session.modified = True
+        recipient = request.user.email if request.user.is_authenticated else procurement_request.guest_email
+        if recipient:
+            send_request_email(procurement_request, recipient, "UPLOAD", f"Upload received: {procurement_request.request_number}", "emails/upload_received.html", request)
         return redirect("requests_app:edit", pk=procurement_request.pk)
     return render(request, "requests_app/submit.html", {"form": form})
 
 
-@login_required
 def edit_request(request, pk):
-    procurement_request = get_object_or_404(ProcurementRequest, pk=pk, requestor=request.user)
+    procurement_request = get_object_or_404(ProcurementRequest, pk=pk)
+    if not can_access_request(request, procurement_request):
+        raise Http404
     if procurement_request.status != ProcurementRequest.Status.DRAFT:
         messages.info(request, "Submitted requests can no longer be edited.")
         return redirect("requests_app:detail", pk=pk)
@@ -73,9 +81,10 @@ def edit_request(request, pk):
                 procurement_request.status = ProcurementRequest.Status.SUBMITTED
                 procurement_request.submitted_at = timezone.now()
                 procurement_request.save(update_fields=["status", "submitted_at", "updated_at"])
-                StatusHistory.objects.create(request=procurement_request, old_status=ProcurementRequest.Status.DRAFT, new_status=ProcurementRequest.Status.SUBMITTED, changed_by=request.user, comment="Submitted to procurement")
-                if request.user.email:
-                    send_request_email(procurement_request, request.user.email, "SUBMISSION", f"Request submitted: {procurement_request.request_number}", "emails/request_submitted.html", request)
+                StatusHistory.objects.create(request=procurement_request, old_status=ProcurementRequest.Status.DRAFT, new_status=ProcurementRequest.Status.SUBMITTED, changed_by=request.user if request.user.is_authenticated else None, comment="Submitted to procurement")
+                recipient = request.user.email if request.user.is_authenticated else procurement_request.guest_email
+                if recipient:
+                    send_request_email(procurement_request, recipient, "SUBMISSION", f"Request submitted: {procurement_request.request_number}", "emails/request_submitted.html", request)
                 send_request_email(procurement_request, settings.PROCUREMENT_EMAIL, "PROCUREMENT_NOTIFICATION", f"New procurement request: {procurement_request.request_number}", "emails/request_submitted.html", request)
                 messages.success(request, "Your request was submitted to procurement.")
                 return redirect("requests_app:detail", pk=pk)
@@ -85,19 +94,17 @@ def edit_request(request, pk):
     return render(request, "requests_app/edit_request.html", {"form": form, "formset": formset, "procurement_request": procurement_request})
 
 
-@login_required
 def request_detail(request, pk):
     queryset = ProcurementRequest.objects.select_related("requestor", "commodity_group").prefetch_related("order_lines", "status_history__changed_by")
     procurement_request = get_object_or_404(queryset, pk=pk)
-    if procurement_request.requestor_id != request.user.id and not is_procurement(request.user):
+    if not can_access_request(request, procurement_request) and not is_procurement(request.user):
         raise Http404
     return render(request, "requests_app/request_detail.html", {"procurement_request": procurement_request})
 
 
-@login_required
 def request_document(request, pk):
     procurement_request = get_object_or_404(ProcurementRequest, pk=pk)
-    if procurement_request.requestor_id != request.user.id and not is_procurement(request.user):
+    if not can_access_request(request, procurement_request) and not is_procurement(request.user):
         raise Http404
     procurement_request.document.open("rb")
     return FileResponse(procurement_request.document, content_type="application/pdf", filename=procurement_request.original_filename)
@@ -129,8 +136,15 @@ def procurement_detail(request, pk):
             procurement_request.status = new_status
             procurement_request.save(update_fields=["status", "updated_at"])
             StatusHistory.objects.create(request=procurement_request, old_status=old_status, new_status=new_status, changed_by=request.user, comment=form.cleaned_data["comment"])
-            if procurement_request.requestor.email:
-                send_request_email(procurement_request, procurement_request.requestor.email, "STATUS_CHANGE", f"Status updated: {procurement_request.request_number}", "emails/status_changed.html", request)
+            recipient = procurement_request.requestor.email if procurement_request.requestor else procurement_request.guest_email
+            if recipient:
+                send_request_email(procurement_request, recipient, "STATUS_CHANGE", f"Status updated: {procurement_request.request_number}", "emails/status_changed.html", request)
             messages.success(request, "Status updated and the requestor was notified.")
         return redirect("requests_app:procurement_detail", pk=pk)
     return render(request, "requests_app/procurement_detail.html", {"procurement_request": procurement_request, "status_form": form})
+
+
+def can_access_request(request, procurement_request):
+    if request.user.is_authenticated and procurement_request.requestor_id == request.user.id:
+        return True
+    return str(procurement_request.pk) in request.session.get("guest_request_ids", [])

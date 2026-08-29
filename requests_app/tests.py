@@ -45,6 +45,29 @@ class RequestWorkflowTests(TestCase):
         response = self.client.get(reverse("requests_app:my_requests"))
         self.assertRedirects(response, "/accounts/login/?next=/requests/")
 
+    def test_guest_home_redirects_to_login(self):
+        response = self.client.get(reverse("requests_app:home"))
+        self.assertRedirects(response, reverse("login"))
+
+    @override_settings(OPENAI_API_KEY="")
+    def test_guest_can_upload_and_access_own_draft(self):
+        response = self.client.post(reverse("requests_app:upload"), {
+            "requestor_name": "Guest User", "email": "guest@example.com",
+            "document": SimpleUploadedFile("offer.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf"),
+        })
+        created = ProcurementRequest.objects.get()
+        self.assertIsNone(created.requestor)
+        self.assertEqual(created.guest_email, "guest@example.com")
+        self.assertRedirects(response, reverse("requests_app:edit", args=[created.pk]))
+        self.assertEqual(self.client.get(reverse("requests_app:edit", args=[created.pk])).status_code, 200)
+
+    def test_guest_cannot_access_another_sessions_request(self):
+        request = self.create_request(user=None)
+        request.requestor = None
+        request.guest_email = "guest@example.com"
+        request.save()
+        self.assertEqual(self.client.get(reverse("requests_app:edit", args=[request.pk])).status_code, 404)
+
     def test_employee_only_sees_own_requests(self):
         own = self.create_request()
         self.create_request(user=self.other)

@@ -2,7 +2,7 @@
 {% block title %}Review {{ procurement_request.request_number }} · Lio Intake{% endblock %}
 {% block shell_class %}wide-shell{% endblock %}
 {% block content %}
-<div class="review-heading"><div><a class="back-link" href="{% url 'requests_app:my_requests' %}">← My requests</a><span class="eyebrow">Step 2 of 2</span><h1>Review your request</h1><p>Check the extracted information before sending it to procurement.</p></div><span class="status status-draft">Draft saved</span></div>
+<div class="review-heading"><div>{% if user.is_authenticated %}<a class="back-link" href="{% url 'requests_app:my_requests' %}">← My requests</a>{% endif %}<span class="eyebrow">Step 2 of 2</span><h1>Review your request</h1><p>Check the extracted information before sending it to procurement.</p></div><span class="status status-draft">Draft saved</span></div>
 {% if procurement_request.extraction_status == 'FAILED' %}<div class="notice"><strong>Automatic extraction unavailable.</strong> {{ procurement_request.extraction_error }} Complete the fields manually.</div>{% endif %}
 <form method="post" id="request-form">{% csrf_token %}{{ formset.management_form }}
 <div class="review-grid">

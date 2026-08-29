@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}New request · Lio Intake{% endblock %}
 {% block content %}
-<div class="narrow"><a class="back-link" href="{% url 'requests_app:my_requests' %}">← My requests</a><div class="page-heading"><div><span class="eyebrow">Step 1 of 2</span><h1>Upload a vendor quote</h1><p>We’ll extract the supplier, items, prices, and suggest the right commodity group.</p></div></div>
+<div class="narrow">{% if user.is_authenticated %}<a class="back-link" href="{% url 'requests_app:my_requests' %}">← My requests</a>{% endif %}<div class="page-heading"><div><span class="eyebrow">Step 1 of 2</span><h1>Upload a vendor quote</h1><p>We’ll extract the supplier, items, prices, and suggest the right commodity group.</p></div></div>
 <section class="card upload-card"><form method="post" enctype="multipart/form-data" id="upload-form">{% csrf_token %}
+  {% if not user.is_authenticated %}<div class="guest-fields"><div class="form-field"><label for="{{ form.requestor_name.id_for_label }}">Your name</label>{{ form.requestor_name }}{% for error in form.requestor_name.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div><div class="form-field"><label for="{{ form.email.id_for_label }}">Your email</label>{{ form.email }}{% for error in form.email.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div></div>{% endif %}
   <label class="dropzone" for="id_document"><span class="upload-icon">↑</span><strong>Drop your PDF here</strong><span>or click to browse · maximum 10 MB</span>{{ form.document }}</label>
   <div id="file-name" class="selected-file" hidden></div>{% for error in form.document.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
   <div class="upload-actions"><span class="secure-note">🔒 Your document is stored securely</span><button class="button primary" type="submit" id="upload-button">Upload and extract</button></div>

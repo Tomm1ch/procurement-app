@@ -6,7 +6,15 @@ from .models import OrderLine, ProcurementRequest
 
 
 class PDFUploadForm(forms.Form):
+    requestor_name = forms.CharField(max_length=200, required=False)
+    email = forms.EmailField(required=False)
     document = forms.FileField(widget=forms.ClearableFileInput(attrs={"accept": "application/pdf,.pdf", "class": "file-input"}))
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not user or not user.is_authenticated:
+            self.fields["requestor_name"].required = True
+            self.fields["email"].required = True
 
     def clean_document(self):
         document = self.cleaned_data["document"]
