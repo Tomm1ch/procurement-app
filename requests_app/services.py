@@ -223,6 +223,14 @@ def apply_extraction(procurement_request, extracted):
             quantity=Decimal(str(line.quantity)) if line.quantity is not None else None,
             unit=line.unit, total_price=Decimal(str(line.total_price)) if line.total_price is not None else None,
         )
+    if not procurement_request.order_lines.exists():
+        OrderLine.objects.create(
+            request=procurement_request,
+            position=1,
+            description=extracted.title,
+            quantity=Decimal("1"),
+            unit="item",
+        )
 
 
 def send_request_email(procurement_request, recipient, email_type, subject, template, request=None):

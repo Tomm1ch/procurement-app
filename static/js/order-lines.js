@@ -4,7 +4,7 @@ const template = document.querySelector('#empty-line');
 const addButton = document.querySelector('#add-line');
 
 function renumber() {
-  forms.querySelectorAll('.line-form').forEach((row, index) => {
+  forms.querySelectorAll('.line-form:not([hidden])').forEach((row, index) => {
     const number = row.querySelector('.line-number');
     if (number) number.textContent = index + 1;
   });
@@ -26,6 +26,16 @@ forms.addEventListener('input', event => {
   const quantity = Number(row.querySelector('[name$="quantity"]').value);
   const lineTotal = row.querySelector('[name$="total_price"]');
   if (unitPrice >= 0 && quantity >= 0) lineTotal.value = (unitPrice * quantity).toFixed(2);
+});
+
+forms.addEventListener('click', event => {
+  const button = event.target.closest('.remove-line');
+  if (!button) return;
+  const row = button.closest('.line-form');
+  const deleteInput = row.querySelector('[name$="-DELETE"]');
+  if (deleteInput) deleteInput.checked = true;
+  row.hidden = true;
+  renumber();
 });
 
 renumber();

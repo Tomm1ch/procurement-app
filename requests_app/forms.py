@@ -44,6 +44,11 @@ class ProcurementRequestForm(forms.ModelForm):
         self.fields["commodity_group"].queryset = self.fields["commodity_group"].queryset.filter(active=True)
         for field in self.fields.values():
             field.required = False
+        department_choices = [("", "Select a department")] + list(ProcurementRequest.DEPARTMENT_CHOICES)
+        current_department = self.instance.department if self.instance else ""
+        if current_department and current_department not in dict(department_choices):
+            department_choices.insert(1, (current_department, f"{current_department} (extracted)"))
+        self.fields["department"].choices = department_choices
 
 
 class ProcurementStatusForm(forms.Form):
@@ -53,7 +58,7 @@ class ProcurementStatusForm(forms.Form):
 
 OrderLineFormSet = inlineformset_factory(
     ProcurementRequest, OrderLine,
-    fields=("description", "unit_price", "quantity", "unit", "total_price"), extra=1, can_delete=True,
+    fields=("description", "unit_price", "quantity", "unit", "total_price"), extra=0, can_delete=True,
     widgets={
         "unit_price": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
         "quantity": forms.NumberInput(attrs={"step": "0.001", "min": "0"}),

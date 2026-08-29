@@ -70,6 +70,30 @@ class RequestWorkflowTests(TestCase):
         request.save()
         self.assertEqual(self.client.get(reverse("requests_app:edit", args=[request.pk])).status_code, 404)
 
+    def test_edit_page_creates_real_initial_order_line_for_empty_draft(self):
+        request = self.create_request()
+        request.order_lines.all().delete()
+        self.client.force_login(self.employee)
+        response = self.client.get(reverse("requests_app:edit", args=[request.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(request.order_lines.count(), 1)
+        self.assertEqual(response.context["formset"].initial_form_count(), 1)
+
+    def test_guest_status_history_renders_without_a_user(self):
+        request = self.create_request(status=ProcurementRequest.Status.SUBMITTED)
+        request.requestor = None
+        request.guest_email = "guest@example.com"
+        request.save()
+        StatusHistory.objects.create(
+            request=request, old_status=ProcurementRequest.Status.DRAFT,
+            new_status=ProcurementRequest.Status.SUBMITTED, changed_by=None,
+        )
+        session = self.client.session
+        session["guest_request_ids"] = [str(request.pk)]
+        session.save()
+        response = self.client.get(reverse("requests_app:detail", args=[request.pk]))
+        self.assertContains(response, "Guest requestor")
+
     def test_employee_only_sees_own_requests(self):
         own = self.create_request()
         self.create_request(user=self.other)
@@ -104,6 +128,38 @@ class RequestWorkflowTests(TestCase):
         self.assertEqual(request.status, ProcurementRequest.Status.IN_PROGRESS)
         self.assertTrue(StatusHistory.objects.filter(request=request, old_status="SUBMITTED", new_status="IN_PROGRESS").exists())
         self.assertEqual(len(mail.outbox), 1)
+
+    def test_employee_cannot_edit_request_as_procurement(self):
+        request = self.create_request(status=ProcurementRequest.Status.SUBMITTED)
+        self.client.force_login(self.employee)
+        response = self.client.get(reverse("requests_app:procurement_edit", args=[request.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_procurement_can_update_totals_and_add_order_line(self):
+        request = self.create_request(status=ProcurementRequest.Status.SUBMITTED)
+        request.vendor_vat_id = "DE123456789"
+        request.save()
+        line = request.order_lines.get()
+        self.client.force_login(self.procurement)
+        response = self.client.post(reverse("requests_app:procurement_edit", args=[request.pk]), {
+            "requestor_name": request.requestor_name, "department": request.department,
+            "title": request.title, "vendor_name": request.vendor_name,
+            "vendor_vat_id": request.vendor_vat_id, "offer_date": "", "currency": "EUR",
+            "total_cost": "150.00", "commodity_group": self.commodity.pk,
+            "order_lines-TOTAL_FORMS": "2", "order_lines-INITIAL_FORMS": "1",
+            "order_lines-MIN_NUM_FORMS": "0", "order_lines-MAX_NUM_FORMS": "1000",
+            "order_lines-0-id": str(line.pk), "order_lines-0-description": line.description,
+            "order_lines-0-unit_price": "100.00", "order_lines-0-quantity": "1",
+            "order_lines-0-unit": "license", "order_lines-0-total_price": "100.00",
+            "order_lines-1-id": "", "order_lines-1-description": "Setup service",
+            "order_lines-1-unit_price": "50.00", "order_lines-1-quantity": "1",
+            "order_lines-1-unit": "service", "order_lines-1-total_price": "50.00",
+        })
+        self.assertRedirects(response, reverse("requests_app:procurement_detail", args=[request.pk]))
+        request.refresh_from_db()
+        self.assertEqual(request.total_cost, Decimal("150.00"))
+        self.assertEqual(request.order_lines.count(), 2)
+        self.assertTrue(request.status_history.filter(comment="Request details updated by procurement").exists())
 
     @override_settings(OPENAI_API_KEY="")
     def test_valid_pdf_upload_is_saved_when_extraction_is_unavailable(self):
@@ -154,6 +210,13 @@ class RequestWorkflowTests(TestCase):
         self.assertEqual(extracted.offer_date, "2023-11-28")
         self.assertEqual(extracted.total_cost, 1847.19)
         self.assertEqual(extracted.commodity_group_id, "015")
+
+    def test_request_form_uses_common_department_dropdown(self):
+        from .forms import ProcurementRequestForm
+
+        form = ProcurementRequestForm(instance=self.create_request())
+        self.assertEqual(form.fields["department"].widget.input_type, "select")
+        self.assertIn(("Human Resources", "Human Resources"), form.fields["department"].choices)
 
     @patch("requests_app.services._ocr_pdf_text", return_value="Recognized scanned document text with enough characters.")
     @patch("requests_app.services.PdfReader")

@@ -24,6 +24,21 @@ class CommodityGroup(models.Model):
 
 
 class ProcurementRequest(models.Model):
+    DEPARTMENT_CHOICES = (
+        ("Engineering", "Engineering"),
+        ("Finance", "Finance"),
+        ("Human Resources", "Human Resources"),
+        ("Information Technology", "Information Technology"),
+        ("Legal & Compliance", "Legal & Compliance"),
+        ("Marketing", "Marketing"),
+        ("Operations", "Operations"),
+        ("Product", "Product"),
+        ("Sales", "Sales"),
+        ("Facilities", "Facilities"),
+        ("Procurement", "Procurement"),
+        ("Other", "Other"),
+    )
+
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
         SUBMITTED = "SUBMITTED", "Open"
@@ -41,7 +56,7 @@ class ProcurementRequest(models.Model):
     requestor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="procurement_requests")
     guest_email = models.EmailField(blank=True)
     requestor_name = models.CharField(max_length=200, blank=True)
-    department = models.CharField(max_length=150, blank=True)
+    department = models.CharField(max_length=150, blank=True, choices=DEPARTMENT_CHOICES)
     title = models.CharField(max_length=250, blank=True)
     vendor_name = models.CharField(max_length=250, blank=True)
     vendor_vat_id = models.CharField(max_length=40, blank=True)

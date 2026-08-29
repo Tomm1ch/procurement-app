@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import OrderLineFormSet, PDFUploadForm, ProcurementRequestForm, ProcurementStatusForm
-from .models import ProcurementRequest, StatusHistory
+from .models import OrderLine, ProcurementRequest, StatusHistory
 from .permissions import is_procurement, procurement_required
 from .services import apply_extraction, extract_quote, send_request_email, submission_errors
 
@@ -62,6 +62,14 @@ def edit_request(request, pk):
     if procurement_request.status != ProcurementRequest.Status.DRAFT:
         messages.info(request, "Submitted requests can no longer be edited.")
         return redirect("requests_app:detail", pk=pk)
+    if request.method == "GET" and not procurement_request.order_lines.exists():
+        OrderLine.objects.create(
+            request=procurement_request,
+            position=1,
+            description=procurement_request.title,
+            quantity=1,
+            unit="item",
+        )
     form = ProcurementRequestForm(request.POST or None, instance=procurement_request)
     formset = OrderLineFormSet(request.POST or None, instance=procurement_request)
     if request.method == "POST" and form.is_valid() and formset.is_valid():
@@ -142,6 +150,49 @@ def procurement_detail(request, pk):
             messages.success(request, "Status updated and the requestor was notified.")
         return redirect("requests_app:procurement_detail", pk=pk)
     return render(request, "requests_app/procurement_detail.html", {"procurement_request": procurement_request, "status_form": form})
+
+
+@procurement_required
+def procurement_edit(request, pk):
+    procurement_request = get_object_or_404(
+        ProcurementRequest.objects.exclude(status=ProcurementRequest.Status.DRAFT), pk=pk,
+    )
+    if request.method == "GET" and not procurement_request.order_lines.exists():
+        OrderLine.objects.create(request=procurement_request, position=1, quantity=1, unit="item")
+    form = ProcurementRequestForm(request.POST or None, instance=procurement_request)
+    formset = OrderLineFormSet(request.POST or None, instance=procurement_request)
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        errors = []
+        with transaction.atomic():
+            form.save()
+            formset.save()
+            for position, line in enumerate(procurement_request.order_lines.all(), start=1):
+                if line.position != position:
+                    line.position = position
+                    line.save(update_fields=["position"])
+            errors = submission_errors(procurement_request)
+            if errors:
+                transaction.set_rollback(True)
+            else:
+                StatusHistory.objects.create(
+                    request=procurement_request,
+                    old_status=procurement_request.status,
+                    new_status=procurement_request.status,
+                    changed_by=request.user,
+                    comment="Request details updated by procurement",
+                )
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            messages.success(request, "Request details updated.")
+            return redirect("requests_app:procurement_detail", pk=pk)
+    return render(request, "requests_app/edit_request.html", {
+        "form": form,
+        "formset": formset,
+        "procurement_request": procurement_request,
+        "procurement_mode": True,
+    })
 
 
 def can_access_request(request, procurement_request):

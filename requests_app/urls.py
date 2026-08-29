@@ -12,4 +12,5 @@ urlpatterns = [
     path("requests/<uuid:pk>/document/", views.request_document, name="document"),
     path("procurement/", views.procurement_list, name="procurement_list"),
     path("procurement/<uuid:pk>/", views.procurement_detail, name="procurement_detail"),
+    path("procurement/<uuid:pk>/edit/", views.procurement_edit, name="procurement_edit"),
 ]
