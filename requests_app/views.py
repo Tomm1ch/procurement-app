@@ -160,7 +160,12 @@ def procurement_edit(request, pk):
     )
     if request.method == "GET" and not procurement_request.order_lines.exists():
         OrderLine.objects.create(request=procurement_request, position=1, quantity=1, unit="item")
-    form = ProcurementRequestForm(request.POST or None, instance=procurement_request, commodity_editable=True)
+    form = ProcurementRequestForm(
+        request.POST or None,
+        instance=procurement_request,
+        commodity_editable=True,
+        requestor_details_editable=False,
+    )
     formset = OrderLineFormSet(request.POST or None, instance=procurement_request)
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         errors = []

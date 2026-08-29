@@ -39,12 +39,14 @@ class ProcurementRequestForm(forms.ModelForm):
             "currency": forms.TextInput(attrs={"maxlength": "3"}),
         }
 
-    def __init__(self, *args, commodity_editable=False, **kwargs):
+    def __init__(self, *args, commodity_editable=False, requestor_details_editable=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["commodity_group"].queryset = self.fields["commodity_group"].queryset.filter(active=True)
         self.fields["commodity_group"].disabled = not commodity_editable
         if not commodity_editable:
             self.fields["commodity_group"].help_text = "Automatically assigned from the uploaded quote. Procurement can correct it after submission."
+        self.fields["requestor_name"].disabled = not requestor_details_editable
+        self.fields["department"].disabled = not requestor_details_editable
         for field in self.fields.values():
             field.required = False
         department_choices = [("", "Select a department")] + list(ProcurementRequest.DEPARTMENT_CHOICES)

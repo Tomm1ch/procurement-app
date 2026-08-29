@@ -142,7 +142,7 @@ class RequestWorkflowTests(TestCase):
         line = request.order_lines.get()
         self.client.force_login(self.procurement)
         response = self.client.post(reverse("requests_app:procurement_edit", args=[request.pk]), {
-            "requestor_name": request.requestor_name, "department": request.department,
+            "requestor_name": "Tampered Name", "department": "Finance",
             "title": request.title, "vendor_name": request.vendor_name,
             "vendor_vat_id": request.vendor_vat_id, "offer_date": "", "currency": "EUR",
             "total_cost": "150.00", "commodity_group": self.commodity.pk,
@@ -159,6 +159,8 @@ class RequestWorkflowTests(TestCase):
         request.refresh_from_db()
         self.assertEqual(request.total_cost, Decimal("150.00"))
         self.assertEqual(request.order_lines.count(), 2)
+        self.assertEqual(request.requestor_name, "Eva Example")
+        self.assertEqual(request.department, "Engineering")
         self.assertTrue(request.status_history.filter(comment="Request details updated by procurement").exists())
 
     @override_settings(OPENAI_API_KEY="")
@@ -222,8 +224,14 @@ class RequestWorkflowTests(TestCase):
     def test_procurement_form_can_edit_commodity_group(self):
         from .forms import ProcurementRequestForm
 
-        form = ProcurementRequestForm(instance=self.create_request(), commodity_editable=True)
+        form = ProcurementRequestForm(
+            instance=self.create_request(),
+            commodity_editable=True,
+            requestor_details_editable=False,
+        )
         self.assertFalse(form.fields["commodity_group"].disabled)
+        self.assertTrue(form.fields["requestor_name"].disabled)
+        self.assertTrue(form.fields["department"].disabled)
 
     @patch("requests_app.services._ocr_pdf_text", return_value="Recognized scanned document text with enough characters.")
     @patch("requests_app.services.PdfReader")
