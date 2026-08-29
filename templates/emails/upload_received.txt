@@ -1,0 +1,4 @@
+Your quote was uploaded.
+We received {{ procurement_request.original_filename }} as request {{ procurement_request.request_number }}.
+Please review the extracted fields before submitting it to procurement.
+{{ absolute_url }}

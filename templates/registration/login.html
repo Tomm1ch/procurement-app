@@ -1,10 +1,22 @@
 {% extends "base.html" %}
-{% block title %}Sign in{% endblock %}
+{% block title %}Sign in · Lio Intake{% endblock %}
+{% block shell_class %}auth-shell{% endblock %}
 {% block content %}
-<h1>Sign in</h1>
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Sign in</button>
-</form>
+<section class="login-card">
+  <div class="login-intro">
+    <span class="eyebrow">Procurement, simplified</span>
+    <h1>Turn quotes into purchase requests.</h1>
+    <p>Upload a vendor quote, review the extracted details, and send a clean request to procurement.</p>
+  </div>
+  <div class="login-form-panel">
+    <h2>Welcome back</h2><p class="muted">Sign in with your company account.</p>
+    {% if form.errors %}<div class="field-error">The username or password is incorrect.</div>{% endif %}
+    <form method="post">{% csrf_token %}
+      <label for="id_username">Username</label>{{ form.username }}
+      <label for="id_password">Password</label>{{ form.password }}
+      <button class="button primary full" type="submit">Sign in</button>
+    </form>
+    <p class="demo-hint">Demo: <code>employee</code> or <code>procurement</code> · password <code>&lt;username&gt;123</code></p>
+  </div>
+</section>
 {% endblock %}

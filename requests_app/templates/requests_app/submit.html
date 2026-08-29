@@ -1,2 +1,11 @@
 {% extends "base.html" %}
-{% block content %}<h1>Submit a request</h1>{% endblock %}
+{% block title %}New request · Lio Intake{% endblock %}
+{% block content %}
+<div class="narrow"><a class="back-link" href="{% url 'requests_app:my_requests' %}">← My requests</a><div class="page-heading"><div><span class="eyebrow">Step 1 of 2</span><h1>Upload a vendor quote</h1><p>We’ll extract the supplier, items, prices, and suggest the right commodity group.</p></div></div>
+<section class="card upload-card"><form method="post" enctype="multipart/form-data" id="upload-form">{% csrf_token %}
+  <label class="dropzone" for="id_document"><span class="upload-icon">↑</span><strong>Drop your PDF here</strong><span>or click to browse · maximum 10 MB</span>{{ form.document }}</label>
+  <div id="file-name" class="selected-file" hidden></div>{% for error in form.document.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+  <div class="upload-actions"><span class="secure-note">🔒 Your document is stored securely</span><button class="button primary" type="submit" id="upload-button">Upload and extract</button></div>
+</form></section></div>
+{% endblock %}
+{% block scripts %}<script>const input=document.querySelector('#id_document'),nameBox=document.querySelector('#file-name'),form=document.querySelector('#upload-form'),button=document.querySelector('#upload-button');input.addEventListener('change',()=>{if(input.files.length){nameBox.textContent='PDF · '+input.files[0].name;nameBox.hidden=false;}});form.addEventListener('submit',()=>{button.disabled=true;button.textContent='Reading your quote…';});</script>{% endblock %}

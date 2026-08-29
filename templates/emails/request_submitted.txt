@@ -1,0 +1,3 @@
+Request {{ procurement_request.request_number }} — {{ procurement_request.title }} has been submitted to procurement.
+Total: {{ procurement_request.total_cost }} {{ procurement_request.currency }}
+{{ absolute_url }}

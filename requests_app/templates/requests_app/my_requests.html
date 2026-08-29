@@ -1,2 +1,12 @@
 {% extends "base.html" %}
-{% block content %}<h1>My requests</h1>{% endblock %}
+{% block title %}My requests · Lio Intake{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">Employee workspace</span><h1>My requests</h1><p>Upload quotes and follow their progress.</p></div><a class="button primary" href="{% url 'requests_app:upload' %}">＋ New request</a></div>
+<section class="card table-card">
+  {% if requests %}
+  <div class="table-wrap"><table><thead><tr><th>Request</th><th>Vendor</th><th>Total</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody>
+    {% for item in requests %}<tr><td><strong>{{ item.title|default:"Untitled request" }}</strong><small>{{ item.request_number }}</small></td><td>{{ item.vendor_name|default:"—" }}</td><td>{% if item.total_cost is not None %}{{ item.total_cost }} {{ item.currency }}{% else %}—{% endif %}</td><td><span class="status status-{{ item.status|lower }}">{{ item.get_status_display }}</span></td><td>{{ item.updated_at|date:"d M Y" }}</td><td><a href="{% if item.status == 'DRAFT' %}{% url 'requests_app:edit' item.pk %}{% else %}{% url 'requests_app:detail' item.pk %}{% endif %}">Open →</a></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state"><div class="empty-icon">⌁</div><h2>No requests yet</h2><p>Your uploaded quotes and procurement updates will appear here.</p><a class="button primary" href="{% url 'requests_app:upload' %}">Upload your first quote</a></div>{% endif %}
+</section>
+{% endblock %}

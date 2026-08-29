@@ -1,0 +1,1 @@
+<h2>Your request status changed</h2><p>{{ procurement_request.request_number }} — <strong>{{ procurement_request.title }}</strong> is now <strong>{{ procurement_request.get_status_display }}</strong>.</p>{% if absolute_url %}<p><a href="{{ absolute_url }}">View status</a></p>{% endif %}

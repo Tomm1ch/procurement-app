@@ -1,13 +1,30 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Procurement Requests{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/app.css">
+  <title>{% block title %}Lio Intake{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body>
-  <header><a href="/">Procurement Requests</a></header>
-  <main>{% block content %}{% endblock %}</main>
+  <header class="topbar">
+    <a class="brand" href="{% url 'requests_app:home' %}"><span class="brand-mark">L</span><span>Lio Intake</span></a>
+    {% if user.is_authenticated %}
+      <nav aria-label="Main navigation">
+        {% if is_procurement %}<a href="{% url 'requests_app:procurement_list' %}">Procurement queue</a>{% else %}<a href="{% url 'requests_app:my_requests' %}">My requests</a>{% endif %}
+        <span class="user-name">{{ user.get_full_name|default:user.username }}</span>
+        <form action="{% url 'logout' %}" method="post" class="inline-form">{% csrf_token %}<button class="link-button" type="submit">Sign out</button></form>
+      </nav>
+    {% endif %}
+  </header>
+  <main class="page-shell {% block shell_class %}{% endblock %}">
+    {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

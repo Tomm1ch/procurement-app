@@ -1,0 +1,1 @@
+<h2>Request submitted</h2><p>{{ procurement_request.request_number }} — <strong>{{ procurement_request.title }}</strong> has been submitted to procurement.</p><p>Total: {{ procurement_request.total_cost }} {{ procurement_request.currency }}</p>{% if absolute_url %}<p><a href="{{ absolute_url }}">Open request</a></p>{% endif %}

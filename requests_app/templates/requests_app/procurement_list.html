@@ -1,2 +1,8 @@
 {% extends "base.html" %}
-{% block content %}<h1>Incoming requests</h1>{% endblock %}
+{% block title %}Procurement queue · Lio Intake{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">Procurement workspace</span><h1>Incoming requests</h1><p>Review and manage purchase requests from across the company.</p></div></div>
+<div class="metrics"><div class="metric"><span>Open</span><strong>{{ counts.open }}</strong></div><div class="metric"><span>In progress</span><strong>{{ counts.progress }}</strong></div><div class="metric"><span>Closed</span><strong>{{ counts.closed }}</strong></div></div>
+<section class="card table-card"><form method="get" class="filters"><input type="search" name="q" value="{{ query }}" placeholder="Search request, vendor, requestor…"><select name="status"><option value="">All statuses</option>{% for value,label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="button secondary" type="submit">Filter</button></form>
+{% if requests %}<div class="table-wrap"><table><thead><tr><th>Request</th><th>Requestor</th><th>Vendor</th><th>Total</th><th>Status</th><th>Submitted</th><th></th></tr></thead><tbody>{% for item in requests %}<tr><td><strong>{{ item.title }}</strong><small>{{ item.request_number }}</small></td><td>{{ item.requestor_name }}<small>{{ item.department }}</small></td><td>{{ item.vendor_name }}</td><td>{{ item.total_cost }} {{ item.currency }}</td><td><span class="status status-{{ item.status|lower }}">{{ item.get_status_display }}</span></td><td>{{ item.submitted_at|date:"d M Y" }}</td><td><a href="{% url 'requests_app:procurement_detail' item.pk %}">Review →</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty-state"><h2>No matching requests</h2><p>New submitted requests will appear here.</p></div>{% endif %}</section>
+{% endblock %}

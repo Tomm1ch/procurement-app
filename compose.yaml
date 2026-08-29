@@ -1,11 +1,25 @@
 services:
-  web:
-    build: .
-    command: python manage.py runserver 0.0.0.0:8000
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: procurement
+      POSTGRES_USER: procurement
+      POSTGRES_PASSWORD: procurement
     ports:
-      - "8000:8000"
+      - "5434:5432"
     volumes:
-      - .:/app
-    env_file:
-      - path: .env
-        required: false
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U procurement"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1026:1025"
+      - "8026:8025"
+
+volumes:
+  postgres_data:
