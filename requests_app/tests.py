@@ -211,6 +211,33 @@ class RequestWorkflowTests(TestCase):
         self.assertEqual(extracted.total_cost, 1847.19)
         self.assertEqual(extracted.commodity_group_id, "015")
 
+    def test_local_parser_extracts_multiple_lines_and_keeps_document_total(self):
+        extracted = extract_quote_locally(
+            "Vendor GmbH\nPos. Bezeichnung Menge Einheit Preis Gesamt\n"
+            "1 Moss panel 1,28 qm 559,00 715,52\n"
+            "2 Edge greenery 4,80 Lfm 25,13 120,62\n"
+            "3 White logo 1,00 Stk. 350,00 350,00\n"
+            "Endsumme 1.546,99 EUR",
+            "quote.pdf",
+        )
+        self.assertEqual(len(extracted.order_lines), 3)
+        self.assertEqual(extracted.order_lines[0].description, "Moss panel")
+        self.assertEqual(extracted.order_lines[1].quantity, 4.8)
+        self.assertEqual(extracted.total_cost, 1546.99)
+        self.assertEqual(extracted.short_description, "Moss panel")
+
+    def test_local_parser_includes_explicit_alternative_quote_line(self):
+        extracted = extract_quote_locally(
+            "Vendor GmbH\nPos. Bezeichnung Menge Einheit Preis Gesamt\n"
+            "1 Moss panel 1,00 Stk. 715,26 715,26\n"
+            "2 Logo horizontal 1,00 Stk. 622,00 622,00\n"
+            "3 Alternativ: Logo vertical 1,00 Stk. 430,00 430,00\n"
+            "Endsumme 1.847,19 EUR",
+            "quote.pdf",
+        )
+        self.assertEqual([line.total_price for line in extracted.order_lines], [715.26, 622.0, 430.0])
+        self.assertEqual(extracted.total_cost, 1847.19)
+
     def test_request_form_uses_common_department_dropdown(self):
         from .forms import ProcurementRequestForm
 
@@ -218,6 +245,8 @@ class RequestWorkflowTests(TestCase):
         self.assertEqual(form.fields["department"].widget.input_type, "select")
         self.assertIn(("Human Resources", "Human Resources"), form.fields["department"].choices)
         self.assertTrue(form.fields["commodity_group"].disabled)
+        self.assertIn("short_description", form.fields)
+        self.assertTrue(form.fields["total_cost"].widget.attrs["readonly"])
 
     def test_procurement_form_can_edit_commodity_group(self):
         from .forms import ProcurementRequestForm

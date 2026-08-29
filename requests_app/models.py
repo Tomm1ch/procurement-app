@@ -58,6 +58,7 @@ class ProcurementRequest(models.Model):
     requestor_name = models.CharField(max_length=200, blank=True)
     department = models.CharField(max_length=150, blank=True, choices=DEPARTMENT_CHOICES)
     title = models.CharField(max_length=250, blank=True)
+    short_description = models.CharField(max_length=500, blank=True)
     vendor_name = models.CharField(max_length=250, blank=True)
     vendor_vat_id = models.CharField(max_length=40, blank=True)
     offer_date = models.DateField(null=True, blank=True)

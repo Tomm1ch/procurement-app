@@ -10,7 +10,8 @@ and update their status.
 - PDF text extraction with `pypdf`
 - OCR fallback with OCRmyPDF and Tesseract for scanned documents
 - Fully local structured extraction with no paid API dependency
-- Editable request details and order lines before submission
+- Multi-line order extraction with live quantity and line-amount totals
+- Editable request details, short description, and order lines before submission
 - Guest uploads and authenticated employee accounts
 - Procurement dashboard with role-based access
 - Upload, submission, and status-change email notifications

@@ -32,10 +32,17 @@ class PDFUploadForm(forms.Form):
 class ProcurementRequestForm(forms.ModelForm):
     class Meta:
         model = ProcurementRequest
-        fields = ("requestor_name", "department", "title", "vendor_name", "vendor_vat_id", "offer_date", "currency", "total_cost", "commodity_group")
+        fields = ("requestor_name", "department", "title", "short_description", "vendor_name", "vendor_vat_id", "offer_date", "currency", "total_cost", "commodity_group")
         widgets = {
+            "short_description": forms.Textarea(attrs={"rows": 3}),
             "offer_date": forms.DateInput(attrs={"type": "date"}),
-            "total_cost": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "total_cost": forms.NumberInput(attrs={
+                "step": "0.01",
+                "min": "0",
+                "readonly": True,
+                "aria-readonly": "true",
+                "class": "calculated-field",
+            }),
             "currency": forms.TextInput(attrs={"maxlength": "3"}),
         }
 

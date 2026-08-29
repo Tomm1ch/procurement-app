@@ -29,6 +29,7 @@ class ExtractedQuote:
     requestor_name: str = ""
     department: str = ""
     title: str = ""
+    short_description: str = ""
     vendor_name: str = ""
     vendor_vat_id: str = ""
     offer_date: str | None = None
@@ -95,16 +96,112 @@ def extract_quote_locally(text, filename):
     vendor = _find_vendor(lines)
     parsed_date = _parse_date(date_match.group(1)) if date_match else None
     title = _find_title(lines, filename)
+    order_lines = _extract_order_lines(text)
     group_id, reason = _classify_locally(text)
     return ExtractedQuote(
-        title=title, vendor_name=vendor,
+        title=title,
+        short_description=order_lines[0].description[:500] if order_lines else title,
+        vendor_name=vendor,
         vendor_vat_id=re.sub(r"\s", "", vat_match.group(1)) if vat_match else "",
         offer_date=parsed_date.isoformat() if parsed_date else None,
         currency="EUR" if "€" in text or re.search(r"\bEUR\b", text) else "EUR",
         total_cost=float(total) if total is not None else None,
         commodity_group_id=group_id, classification_reason=reason,
-        order_lines=[ExtractedOrderLine(description=title, unit_price=float(total), quantity=1, unit="item", total_price=float(total))] if total is not None else [],
+        order_lines=order_lines,
     )
+
+
+def _extract_order_lines(text):
+    """Extract priced table rows from common German and English quote layouts."""
+    normalized = text.replace("\xa0", " ").replace("�", "€")
+    money = r"(?:(?:€\s*)?[0-9]{1,3}(?:[. ][0-9]{3})*(?:,[0-9]{2})|(?:€\s*)?[0-9]+(?:\.[0-9]{2}))"
+    priced_row = re.compile(
+        rf"(?P<quantity>\d+(?:[.,]\d+)?)\s+"
+        rf"(?P<unit>[A-Za-zÄÖÜäöüß.]+)\s+"
+        rf"(?P<unit_price>{money})"
+        rf"(?:\s+[+-]?\d+(?:[.,]\d+)?\s*%)?\s+"
+        rf"(?P<total>{money})(?:\s*€)?",
+        re.I,
+    )
+    stop = r"(?=^\d+\s+\S|^(?:Positionen|Versandkosten|Netto|Endsumme|Gesamtsumme|Zwischensumme)|\Z)"
+    blocks = re.finditer(rf"(?ms)^(?P<position>\d+)\s+(?P<body>.*?){stop}", normalized)
+    extracted = []
+    for block in blocks:
+        body = " ".join(block.group("body").split())
+        match = priced_row.search(body)
+        if not match:
+            continue
+        description = body[:match.start()].strip(" -–")
+        if not description:
+            continue
+        extracted.append(_build_order_line(description, match))
+
+    if extracted:
+        return extracted
+
+    # Compact exports sometimes concatenate every column without whitespace.
+    compact = re.search(
+        rf"(?P<position>\d+\.\d)(?P<quantity>\d+[,]\d{{2}})\d{{4,}}"
+        rf"(?P<description>.*?)(?:Übertrag|Uebertrag)\s*(?P<total>{money})",
+        normalized,
+        re.I | re.S,
+    )
+    if compact:
+        quantity = _parse_decimal_token(compact.group("quantity"))
+        total = _parse_money_token(compact.group("total"))
+        description = " ".join(compact.group("description").split()).strip(" -–")
+        return [ExtractedOrderLine(
+            description=description[:500],
+            unit_price=float(total / quantity),
+            quantity=float(quantity),
+            unit="item",
+            total_price=float(total),
+        )]
+
+    table = re.search(
+        r"(?:Produkt\s*/\s*Beschreibung|Description).*?Gesamt\s*(?P<body>.*?)"
+        r"(?=Zwischensumme|Nettosumme|Gesamtsumme|Grand Total|\Z)",
+        normalized,
+        re.I | re.S,
+    )
+    if table:
+        body = " ".join(table.group("body").split())
+        row = re.search(
+            rf"(?P<description>.+?)\s+(?P<quantity>\d+(?:[.,]\d+)?)\s+"
+            rf"(?P<unit_price>{money})\s+(?P<total>{money})(?:\s*€)?$",
+            body,
+            re.I,
+        )
+        if row:
+            return [ExtractedOrderLine(
+                description=row.group("description")[:500],
+                unit_price=float(_parse_money_token(row.group("unit_price"))),
+                quantity=float(_parse_decimal_token(row.group("quantity"))),
+                unit="item",
+                total_price=float(_parse_money_token(row.group("total"))),
+            )]
+    return []
+
+
+def _build_order_line(description, match):
+    return ExtractedOrderLine(
+        description=description[:500],
+        unit_price=float(_parse_money_token(match.group("unit_price"))),
+        quantity=float(_parse_decimal_token(match.group("quantity"))),
+        unit=match.group("unit").rstrip("."),
+        total_price=float(_parse_money_token(match.group("total"))),
+    )
+
+
+def _parse_decimal_token(value):
+    value = value.replace(" ", "")
+    if "," in value:
+        value = value.replace(".", "").replace(",", ".")
+    return Decimal(value)
+
+
+def _parse_money_token(value):
+    return _parse_decimal_token(value.replace("€", "").strip())
 
 
 def _parse_money(value):
@@ -183,7 +280,7 @@ def _classify_locally(text):
 
 def apply_extraction(procurement_request, extracted):
     from datetime import date
-    for field in ("requestor_name", "department", "title", "vendor_name", "vendor_vat_id", "currency", "classification_reason"):
+    for field in ("requestor_name", "department", "title", "short_description", "vendor_name", "vendor_vat_id", "currency", "classification_reason"):
         value = getattr(extracted, field, None)
         if value:
             setattr(procurement_request, field, value)
@@ -259,8 +356,4 @@ def submission_errors(procurement_request):
             errors.append(f"Order line {index} quantity must be greater than zero.")
         elif abs(line.total_price - (line.unit_price * line.quantity)) > Decimal("0.02"):
             errors.append(f"Order line {index} total does not match quantity × unit price.")
-    if lines and procurement_request.total_cost is not None:
-        calculated_total = sum((line.total_price or Decimal("0")) for line in lines)
-        if abs(procurement_request.total_cost - calculated_total) > Decimal("0.02"):
-            errors.append("Total cost does not match the sum of the order lines.")
     return errors
