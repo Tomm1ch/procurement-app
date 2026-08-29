@@ -51,7 +51,11 @@ def upload_request(request):
             request.session.modified = True
         recipient = request.user.email if request.user.is_authenticated else procurement_request.guest_email
         if recipient:
-            send_request_email(procurement_request, recipient, "UPLOAD", f"Upload received: {procurement_request.request_number}", "emails/upload_received.html", request)
+            email_sent = send_request_email(procurement_request, recipient, "UPLOAD", f"Upload received: {procurement_request.request_number}", "emails/upload_received.html", request)
+            if email_sent:
+                messages.info(request, f"A confirmation email was sent to {recipient}.")
+            else:
+                messages.warning(request, "Your upload was saved, but the confirmation email could not be sent.")
         return redirect("requests_app:edit", pk=procurement_request.pk)
     return render(request, "requests_app/submit.html", {"form": form})
 
@@ -93,7 +97,8 @@ def edit_request(request, pk):
                 StatusHistory.objects.create(request=procurement_request, old_status=ProcurementRequest.Status.DRAFT, new_status=ProcurementRequest.Status.SUBMITTED, changed_by=request.user if request.user.is_authenticated else None, comment="Submitted to procurement")
                 recipient = request.user.email if request.user.is_authenticated else procurement_request.guest_email
                 if recipient:
-                    send_request_email(procurement_request, recipient, "SUBMISSION", f"Request submitted: {procurement_request.request_number}", "emails/request_submitted.html", request)
+                    if not send_request_email(procurement_request, recipient, "SUBMISSION", f"Request submitted: {procurement_request.request_number}", "emails/request_submitted.html", request):
+                        messages.warning(request, "The request was submitted, but its confirmation email could not be sent.")
                 send_request_email(procurement_request, settings.PROCUREMENT_EMAIL, "PROCUREMENT_NOTIFICATION", f"New procurement request: {procurement_request.request_number}", "emails/request_submitted.html", request)
                 messages.success(request, "Your request was submitted to procurement.")
                 return redirect("requests_app:detail", pk=pk)
@@ -146,9 +151,11 @@ def procurement_detail(request, pk):
             procurement_request.save(update_fields=["status", "updated_at"])
             StatusHistory.objects.create(request=procurement_request, old_status=old_status, new_status=new_status, changed_by=request.user, comment=form.cleaned_data["comment"])
             recipient = procurement_request.requestor.email if procurement_request.requestor else procurement_request.guest_email
-            if recipient:
-                send_request_email(procurement_request, recipient, "STATUS_CHANGE", f"Status updated: {procurement_request.request_number}", "emails/status_changed.html", request)
-            messages.success(request, "Status updated and the requestor was notified.")
+            email_sent = send_request_email(procurement_request, recipient, "STATUS_CHANGE", f"Status updated: {procurement_request.request_number}", "emails/status_changed.html", request) if recipient else False
+            if email_sent:
+                messages.success(request, "Status updated and the requestor was notified.")
+            else:
+                messages.warning(request, "Status updated, but the requestor email could not be sent.")
         return redirect("requests_app:procurement_detail", pk=pk)
     return render(request, "requests_app/procurement_detail.html", {"procurement_request": procurement_request, "status_form": form})
 

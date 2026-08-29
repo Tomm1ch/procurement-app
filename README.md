@@ -83,6 +83,33 @@ Open:
 - Mailpit inbox: http://127.0.0.1:8026
 - Django Admin: http://127.0.0.1:8000/admin/
 
+Mailpit captures outgoing messages locally and does not deliver them to real email
+providers. To use a real SMTP service, change these values in `.env`:
+
+Send an example message to the demo employee and inspect it in Mailpit:
+
+```powershell
+python manage.py send_test_email
+```
+
+Mailpit has no user accounts or separate mailboxes; its single inbox displays all
+locally captured recipients, including `employee@example.com`.
+
+To use a real SMTP service, change these values in `.env`:
+
+```text
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=your-smtp-user
+EMAIL_HOST_PASSWORD=your-smtp-password
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+DEFAULT_FROM_EMAIL=procurement@your-company.com
+```
+
+Use the SMTP provider's application password or secret manager; never commit the
+real password to Git.
+
 ## Demo users
 
 | Role | Username | Password | Email |
