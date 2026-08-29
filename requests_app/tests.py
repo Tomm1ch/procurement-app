@@ -217,6 +217,13 @@ class RequestWorkflowTests(TestCase):
         form = ProcurementRequestForm(instance=self.create_request())
         self.assertEqual(form.fields["department"].widget.input_type, "select")
         self.assertIn(("Human Resources", "Human Resources"), form.fields["department"].choices)
+        self.assertTrue(form.fields["commodity_group"].disabled)
+
+    def test_procurement_form_can_edit_commodity_group(self):
+        from .forms import ProcurementRequestForm
+
+        form = ProcurementRequestForm(instance=self.create_request(), commodity_editable=True)
+        self.assertFalse(form.fields["commodity_group"].disabled)
 
     @patch("requests_app.services._ocr_pdf_text", return_value="Recognized scanned document text with enough characters.")
     @patch("requests_app.services.PdfReader")

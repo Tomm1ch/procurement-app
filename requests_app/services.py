@@ -211,6 +211,8 @@ def apply_extraction(procurement_request, extracted):
         procurement_request.total_cost = Decimal(str(extracted.total_cost))
     if extracted.commodity_group_id:
         procurement_request.commodity_group = CommodityGroup.objects.filter(pk=extracted.commodity_group_id).first()
+    if not procurement_request.commodity_group:
+        procurement_request.commodity_group = CommodityGroup.objects.filter(pk="009").first()
     procurement_request.raw_extraction = extracted.model_dump(mode="json")
     procurement_request.extraction_status = ProcurementRequest.ExtractionStatus.COMPLETED
     procurement_request.extraction_error = ""

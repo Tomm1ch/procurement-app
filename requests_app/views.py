@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import OrderLineFormSet, PDFUploadForm, ProcurementRequestForm, ProcurementStatusForm
-from .models import OrderLine, ProcurementRequest, StatusHistory
+from .models import CommodityGroup, OrderLine, ProcurementRequest, StatusHistory
 from .permissions import is_procurement, procurement_required
 from .services import apply_extraction, extract_quote, send_request_email, submission_errors
 
@@ -42,7 +42,8 @@ def upload_request(request):
         except Exception as exc:
             procurement_request.extraction_status = ProcurementRequest.ExtractionStatus.FAILED
             procurement_request.extraction_error = str(exc)
-            procurement_request.save(update_fields=["extraction_status", "extraction_error", "updated_at"])
+            procurement_request.commodity_group = CommodityGroup.objects.filter(pk="009").first()
+            procurement_request.save(update_fields=["extraction_status", "extraction_error", "commodity_group", "updated_at"])
             messages.warning(request, "The PDF was saved, but automatic extraction was unavailable. Please complete the fields manually.")
         if not request.user.is_authenticated:
             guest_requests = request.session.setdefault("guest_request_ids", [])
@@ -159,7 +160,7 @@ def procurement_edit(request, pk):
     )
     if request.method == "GET" and not procurement_request.order_lines.exists():
         OrderLine.objects.create(request=procurement_request, position=1, quantity=1, unit="item")
-    form = ProcurementRequestForm(request.POST or None, instance=procurement_request)
+    form = ProcurementRequestForm(request.POST or None, instance=procurement_request, commodity_editable=True)
     formset = OrderLineFormSet(request.POST or None, instance=procurement_request)
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         errors = []
