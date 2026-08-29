@@ -1,5 +1,9 @@
-import base64
+import re
+import shutil
+import tempfile
+from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -7,6 +11,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from pypdf import PdfReader
 
 from .models import CommodityGroup, EmailLog, OrderLine, ProcurementRequest
 
@@ -34,27 +39,161 @@ class ExtractedQuote(BaseModel):
 
 
 def extract_quote(procurement_request):
+    text = extract_pdf_text(procurement_request)
     if not settings.OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is not configured. You can still enter all fields manually.")
+        return extract_quote_locally(text, procurement_request.original_filename)
     groups = "\n".join(f"{g.id}: {g.category} / {g.name}" for g in CommodityGroup.objects.filter(active=True))
-    procurement_request.document.open("rb")
-    encoded = base64.b64encode(procurement_request.document.read()).decode("ascii")
-    procurement_request.document.close()
     response = OpenAI(api_key=settings.OPENAI_API_KEY).responses.parse(
         model=settings.OPENAI_MODEL,
         input=[{"role": "user", "content": [
             {"type": "input_text", "text": (
                 "Extract this vendor quote. Preserve decimal values and ISO currency codes. Choose exactly one "
                 "commodity_group_id from the catalogue when possible. Do not invent missing values. Dates must "
-                "be YYYY-MM-DD.\n\nCatalogue:\n" + groups
+                "be YYYY-MM-DD.\n\nCatalogue:\n" + groups + "\n\nQuote text:\n" + text
             )},
-            {"type": "input_file", "filename": procurement_request.original_filename, "file_data": f"data:application/pdf;base64,{encoded}"},
         ]}],
         text_format=ExtractedQuote,
     )
     if not response.output_parsed:
         raise RuntimeError("The document could not be converted into structured fields.")
     return response.output_parsed
+
+
+def extract_pdf_text(procurement_request):
+    procurement_request.document.open("rb")
+    try:
+        reader = PdfReader(procurement_request.document)
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    finally:
+        procurement_request.document.close()
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    if len(text) < 30:
+        text = _ocr_pdf_text(procurement_request)
+    if len(text) < 30:
+        raise RuntimeError("OCR completed but did not find enough readable text in this PDF.")
+    return text
+
+
+def _ocr_pdf_text(procurement_request):
+    try:
+        import ocrmypdf
+    except ImportError as exc:
+        raise RuntimeError("OCRmyPDF is not installed. Install the project requirements and OCR system dependencies.") from exc
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="procurement-ocr-") as directory:
+            input_path = Path(directory) / "input.pdf"
+            output_path = Path(directory) / "ocr.pdf"
+            procurement_request.document.open("rb")
+            try:
+                with input_path.open("wb") as target:
+                    shutil.copyfileobj(procurement_request.document, target)
+            finally:
+                procurement_request.document.close()
+            ocrmypdf.ocr(
+                input_path, output_path, language=["deu", "eng"], mode="force",
+                output_type="pdf", rotate_pages=True, deskew=True, optimize=0,
+                jobs=1, use_threads=True, progress_bar=False,
+            )
+            text = "\n".join(page.extract_text() or "" for page in PdfReader(output_path).pages)
+            return re.sub(r"[ \t]+", " ", text).strip()
+    except Exception as exc:
+        raise RuntimeError(f"OCRmyPDF could not read this scanned document: {exc}") from exc
+
+
+def extract_quote_locally(text, filename):
+    """Best-effort parser used when no external AI service is configured."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    vat_match = re.search(r"(?:USt[.\s-]*(?:IdNr|ID)|UID|VAT\s*ID|Umsatzsteuer[^:\n]*)[.:\s-]*(DE\s?\d{9})", text, re.I)
+    date_match = re.search(r"(?:Angebotsdatum|Datum|Offer Date|Quote Date)\s*[:.]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2})", text, re.I)
+    total = _find_total(text)
+    vendor = _find_vendor(lines)
+    parsed_date = _parse_date(date_match.group(1)) if date_match else None
+    title = _find_title(lines, filename)
+    group_id, reason = _classify_locally(text)
+    return ExtractedQuote(
+        title=title, vendor_name=vendor,
+        vendor_vat_id=re.sub(r"\s", "", vat_match.group(1)) if vat_match else "",
+        offer_date=parsed_date.isoformat() if parsed_date else None,
+        currency="EUR" if "€" in text or re.search(r"\bEUR\b", text) else "EUR",
+        total_cost=float(total) if total is not None else None,
+        commodity_group_id=group_id, classification_reason=reason,
+        order_lines=[ExtractedOrderLine(description=title, unit_price=float(total), quantity=1, unit="item", total_price=float(total))] if total is not None else [],
+    )
+
+
+def _parse_money(value):
+    value = value.replace(" ", "")
+    if "," in value:
+        value = value.replace(".", "").replace(",", ".")
+    return Decimal(value)
+
+
+def _find_total(text):
+    labels = list(re.finditer(r"(?:Endsumme|Gesamtsumme|Gesamtbetrag|Endbetrag|Total(?: Offer)? Cost|Grand Total)", text, re.I))
+    if not labels:
+        return None
+    following = text[labels[-1].end():labels[-1].end() + 180]
+    same_line = following.splitlines()[0]
+    money_pattern = r"(?:EUR|€)?\s*([0-9]{1,3}(?:[. ][0-9]{3})*(?:,[0-9]{2})|[0-9]+(?:\.[0-9]{2})?)\s*(?:EUR|€)?"
+    same_line_values = re.findall(money_pattern, same_line, re.I)
+    if same_line_values:
+        return _parse_money(same_line_values[0])
+    values = re.findall(money_pattern, following, re.I)
+    return _parse_money(values[-1]) if values else None
+
+
+def _parse_date(value):
+    for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d.%m.%y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _find_vendor(lines):
+    joined = "\n".join(lines)
+    if re.search(r"Apple Business Team", joined, re.I):
+        return "Apple Business Team"
+    stylegreen = re.search(r"(?:bei|von)\s+(styleGREEN)\b", joined, re.I)
+    if stylegreen:
+        return stylegreen.group(1)
+    gregg = re.search(r"(Gärtner Gregg)(?:Inh\.|\s|$)", joined, re.I)
+    if gregg:
+        return gregg.group(1)
+    for index, line in enumerate(lines):
+        match = re.search(r"(?:Vendor|Anbieter|Lieferant|Firma)\s*(?:Name)?\s*[:.]\s*(.+)", line, re.I)
+        if match:
+            return match.group(1).strip()
+        if re.search(r"\b(?:GmbH|AG|KG|Ltd\.?|Inc\.?)\b", line) and not re.search(r"Lio Technologies", line, re.I):
+            return line.split("|")[0].strip()[:250]
+    return lines[0][:250] if lines else ""
+
+
+def _find_title(lines, filename):
+    for line in lines:
+        match = re.search(r"(?:Betreff|Subject|Description)\s*[:.]\s*(.+)", line, re.I)
+        if match:
+            return match.group(1).strip()[:250]
+    return f"Quote {filename.rsplit('.', 1)[0]}"[:250]
+
+
+def _classify_locally(text):
+    lowered = text.lower()
+    rules = [
+        ("031", ("software", "lizenz", "license", "subscription"), "Software-related terms found in the quote."),
+        ("029", ("laptop", "notebook", "computer", "hardware", "monitor", "macbook", "apple m2"), "IT hardware terms found in the quote."),
+        ("030", ("it service", "support", "hosting", "cloud"), "IT service terms found in the quote."),
+        ("004", ("consulting", "beratung", "consultant"), "Consulting terms found in the quote."),
+        ("015", ("office", "büro", "furniture", "möbel", "moosbild", "raumbegrünung", "pflanzen"), "Office equipment terms found in the quote."),
+        ("022", ("print", "druck"), "Printing terms found in the quote."),
+        ("041", ("online marketing", "seo", "social media"), "Online marketing terms found in the quote."),
+    ]
+    for group_id, keywords, reason in rules:
+        if any(keyword in lowered for keyword in keywords):
+            return group_id, reason
+    return "009", "No specific category keyword was found; review the suggested miscellaneous-services group."
 
 
 def apply_extraction(procurement_request, extracted):

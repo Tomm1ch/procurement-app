@@ -1,6 +1,7 @@
 import shutil
 import tempfile
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import Group, User
 from django.core import mail
@@ -9,6 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import CommodityGroup, OrderLine, ProcurementRequest, StatusHistory
+from .services import extract_pdf_text, extract_quote_locally
 
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -140,3 +142,26 @@ class RequestWorkflowTests(TestCase):
         self.assertEqual(request.status, ProcurementRequest.Status.SUBMITTED)
         self.assertTrue(StatusHistory.objects.filter(request=request, new_status="SUBMITTED").exists())
         self.assertEqual(len(mail.outbox), 2)
+
+    def test_local_parser_extracts_german_quote_fields_without_api_key(self):
+        extracted = extract_quote_locally(
+            "Dream in Green GmbH\nAngebot 4120\nDatum: 28.11.23\n"
+            "Moosbild 1,00 Stk. 715,26 €\nUSt.-ID: DE325240530\nEndsumme 1.847,19 €",
+            "AN-4120.pdf",
+        )
+        self.assertEqual(extracted.vendor_name, "Dream in Green GmbH")
+        self.assertEqual(extracted.vendor_vat_id, "DE325240530")
+        self.assertEqual(extracted.offer_date, "2023-11-28")
+        self.assertEqual(extracted.total_cost, 1847.19)
+        self.assertEqual(extracted.commodity_group_id, "015")
+
+    @patch("requests_app.services._ocr_pdf_text", return_value="Recognized scanned document text with enough characters.")
+    @patch("requests_app.services.PdfReader")
+    def test_image_only_pdf_uses_ocrmypdf_fallback(self, reader, ocr_fallback):
+        page = MagicMock()
+        page.extract_text.return_value = ""
+        reader.return_value.pages = [page]
+        document = MagicMock()
+        request = MagicMock(document=document)
+        self.assertIn("Recognized scanned", extract_pdf_text(request))
+        ocr_fallback.assert_called_once_with(request)

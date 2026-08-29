@@ -7,7 +7,7 @@ submission; procurement users manage incoming requests and status updates.
 ## What is included
 
 - PDF validation, secure per-request storage, and authenticated document access
-- OpenAI PDF extraction into request fields and order lines
+- Fast `pypdf` text extraction plus OCRmyPDF/Tesseract fallback for scanned PDFs
 - Automatic classification into the 50 supplied commodity groups
 - Editable drafts with server-side submission validation
 - Employee and procurement dashboards
@@ -65,6 +65,18 @@ Start Django locally:
 python manage.py runserver
 ```
 
+### Full Docker mode with OCR
+
+For scanned image-only PDFs, run Django in the preconfigured image containing
+OCRmyPDF, Tesseract, German/English language data, and Ghostscript:
+
+```powershell
+docker compose --profile full up --build
+```
+
+This also applies migrations and prepares the commodity groups and demo users.
+Stop a locally running Django server first so port 8000 is available.
+
 Open:
 
 - Application: http://127.0.0.1:8000
@@ -85,15 +97,19 @@ it will not unexpectedly reset an existing password.
 ## User workflow
 
 1. A guest or signed-in employee uploads a vendor quote PDF. Guests provide their name and email.
-2. Django stores the original document and sends it to OpenAI for extraction.
+2. Django extracts embedded text with `pypdf`; image-only PDFs are OCRed with OCRmyPDF/Tesseract. When configured, OpenAI enriches the text into detailed structured fields.
 3. The employee receives an upload email and reviews all extracted fields.
 4. The employee can add, edit, or delete order lines and correct any field.
 5. Only a valid request can be submitted to procurement.
 6. Procurement sees submitted requests, changes their status, and adds a note.
 7. Every status change is recorded and emailed to the employee.
 
-If `OPENAI_API_KEY` is empty or extraction fails, the PDF is still saved and the
-employee can complete every field manually.
+If `OPENAI_API_KEY` is empty, a local rules-based parser extracts common vendor,
+VAT, date, total and category fields. Every field remains editable before submission.
+
+OCRmyPDF requires Tesseract, German/English language data, and Ghostscript. These
+are included in the project Docker image. Use the `full` Docker profile above, or
+install those native dependencies separately when running Django on Windows.
 
 ## Architecture
 
